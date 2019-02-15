@@ -76,6 +76,14 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute g, Gx, Gu
+        xdot = v*np.cos(th)
+        ydot = v*np.sin(th)
+        tdot = om
+        xstate = np.stack((xdot,ydot,tdot) ,axis = 0)
+        xstate = np.expand_dims(xstate, axis = 1)
+        ustate = np.stack((v,om), axis=0)
+        ustate = np.expand_dims(ustate, axis = 1)
+
         ##############
 
         return g, Gx, Gu
