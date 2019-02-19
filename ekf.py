@@ -21,6 +21,8 @@ class EKF(object):
 
         #### TODO ####
         # update self.x, self.P
+        self.x = self.x +self.x*dt
+        self.P = Gx.dot(self.P).dot(Gx.T) + dt * Gu.dot(self.Q).dot(Gu.T)
         ##############
 
     # Propagates exact (nonlinear) state dynamics; also returns associated Jacobians for EKF linearization
@@ -78,12 +80,30 @@ class Localization_EKF(EKF):
         # compute g, Gx, Gu
         xdot = v*np.cos(th)
         ydot = v*np.sin(th)
-        tdot = om
-        xstate = np.stack((xdot,ydot,tdot) ,axis = 0)
-        xstate = np.expand_dims(xstate, axis = 1)
-        ustate = np.stack((v,om), axis=0)
-        ustate = np.expand_dims(ustate, axis = 1)
-
+        
+        if om < 1e-3:
+            om  = 1e-3
+            gx = x + xdot*dt 
+            gy = y + ydot*dt
+            gth = th + om*dt
+            Gx = np.array([ [1, 0, v/om * (np.cos(th+om*dt)- np.cos(th)) ],
+                            [0, 1, v/om * (np.sin(th+om*dt)- np.sin(th)) ],
+                            [0, 0, 1] ])
+            Gu = np.array([ [1 /om * (np.sin(th+om*dt)-np.sin(th)), -v/(om**2) * (np.sin(th+om*dt)-np.sin(th)) + v/om *( np.cos(th+ om*dt)*dt)],
+                            [1/om * (np.cos(th)-np.cos(th+om*dt)), -v/(om**2) * (np.cos(th)-np.cos(th+om*dt)) + v/om *(np.sin(th+om*dt)*dt) ],
+                            [0, dt] ])           
+        else:
+            gx = x + v/om * (np.sin(th+om*dt)-np.sin(th))
+            gy = y + v/om * (np.cos(th)-np.cos(th+om*dt))
+            gth = th + om*dt
+            Gx = np.array([ [1, 0, v/om * (np.cos(th+om*dt) - np.cos(th)) ],
+                            [0, 1, v/om * (np.sin(th+om*dt) - np.sin(th))],
+                            [0, 0, 1] ])
+            Gu = np.array([ [1 /om * (np.sin(th+om*dt)-np.sin(th)), -v/(om**2) * (np.sin(th+om*dt)-np.sin(th)) + v/om *( np.cos(th+ om*dt)*dt)],
+                            [1/om * (np.cos(th)-np.cos(th+om*dt)), -v/(om**2) * (np.cos(th)-np.cos(th+om*dt)) + v/om *(np.sin(th+om*dt)*dt) ],
+                            [0, dt] ])
+        g = np.stack((gx,gy,gth),axis = 0)
+        
         ##############
 
         return g, Gx, Gu
