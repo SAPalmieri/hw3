@@ -21,7 +21,7 @@ class EKF(object):
 
         #### TODO ####
         # update self.x, self.P
-        self.x = self.x +self.x*dt
+        self.x = g
         self.P = Gx.dot(self.P).dot(Gx.T) + dt * Gu.dot(self.Q).dot(Gu.T)
         ##############
 
@@ -81,16 +81,15 @@ class Localization_EKF(EKF):
         xdot = v*np.cos(th)
         ydot = v*np.sin(th)
         
-        if om < 1e-3:
-            om  = 1e-3
+        if np.abs(om) < 1e-6:
             gx = x + xdot*dt 
             gy = y + ydot*dt
             gth = th + om*dt
-            Gx = np.array([ [1, 0, v/om * (np.cos(th+om*dt)- np.cos(th)) ],
-                            [0, 1, v/om * (np.sin(th+om*dt)- np.sin(th)) ],
+            Gx = np.array([ [1, 0, -v*np.sin(th)*dt ],
+                            [0, 1, v*np.cos(th)*dt ],
                             [0, 0, 1] ])
-            Gu = np.array([ [1 /om * (np.sin(th+om*dt)-np.sin(th)), -v/(om**2) * (np.sin(th+om*dt)-np.sin(th)) + v/om *( np.cos(th+ om*dt)*dt)],
-                            [1/om * (np.cos(th)-np.cos(th+om*dt)), -v/(om**2) * (np.cos(th)-np.cos(th+om*dt)) + v/om *(np.sin(th+om*dt)*dt) ],
+            Gu = np.array([ [np.cos(th)*dt, -v*dt*dt*np.sin(th)],
+                            [np.sin(th)*dt, v*dt*dt*np.cos(th)],
                             [0, dt] ])           
         else:
             gx = x + v/om * (np.sin(th+om*dt)-np.sin(th))
@@ -120,6 +119,11 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute h, Hx
+        xc,yc,thc = self.tf_base_to_camera
+        
+        h = np.array([alpha - thc , r-xc*np.cos(alpha) + yc*np.sin(alpha)])
+        Hx = np.array([ [0,0,-1],
+                        [-np.cos(alpha), -np.sin(alpha), 0]])
         ##############
 
         flipped, h = normalize_line_parameters(h)
@@ -141,6 +145,11 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute v_list, R_list, H_list
+
+
+        # v_list = 1
+        # R_list = 1
+        # H_list = 1
         ##############
 
         return v_list, R_list, H_list
