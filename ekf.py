@@ -48,6 +48,11 @@ class EKF(object):
 
         #### TODO ####
         # update self.x, self.P
+        P = self.P
+        sig = H.dot(P).dot(H.T) + R
+        K = P.dot(H.T).dot(np.linalg.inv(sig))
+        self.x = self.x + K.dot(z)
+        self.P = P - K.dot(sig).dot(K.T)
         ##############
 
     # Converts raw measurement into the relevant Gaussian form (e.g., a dimensionality reduction);
@@ -119,9 +124,24 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute h, Hx
-        xc,yc,thc = self.tf_base_to_camera
-        
-        h = np.array([alpha - thc , r-xc*np.cos(alpha) + yc*np.sin(alpha)])
+        xc,yc,thc = self.tf_base_to_camera #camera coordinates/pose relative to base
+        x,y,th = self.x #base coordinates relative to world
+        #we want parameters in terms of camera (alphac, rc)
+        #currently have parameters in terms of world (alpha,r)
+        #need to transform parameters from world to camera
+        rot = np.array([ [cos(th), -sin(th)],
+                        [sin(th), cos(th)] ])
+        dx,dy = rot.dot([x,y])
+        test = 4.98221016
+        alphaprime = alpha-thc-th
+        # h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
+        val = xc*cos(thc) + yc*sin(thc) - x*cos(th) - y*sin(th)
+        dx = val*cos(th+thc)
+        dy = val*sin(th+thc)
+        xdes = x+ dx
+        ydes = y+dy
+        h = np.array([alphaprime, r - xdes*np.cos(th+thc) - (ydes)*np.sin(th+thc)])
+        print('h: ', h)
         Hx = np.array([ [0,0,-1],
                         [-np.cos(alpha), -np.sin(alpha), 0]])
         ##############
@@ -145,11 +165,26 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute v_list, R_list, H_list
+        g = self.g
+        valid = g**2
+        P = self.P
+        v_list = []
+        R_list = []
+        H_list = []
+        for i in range(len(rawR)):
+            for j in range((self.map_lines.shape[1])):
+                m = self.map_lines[:,j]
+                h, Hx = self.map_line_to_predicted_measurement(m)
+                v = rawZ[i]-h
+                S = Hx.dot(P).dot(Hx.T) + rawR[i]
+                d = np.dot(v.T,np.linalg.inv(S)).dot(v)
+                if d < valid:
+                    v_list.append(v)
+                    R_list.append(rawR[i])
+                    H_list.append(Hx)
+                
 
-
-        # v_list = 1
-        # R_list = 1
-        # H_list = 1
+        
         ##############
 
         return v_list, R_list, H_list
@@ -164,6 +199,9 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute z, R, H
+        z = np.reshape(v_list, (len(v_list),1))
+        R = np.eye(len(z))*R_list
+        H = np.reshape(H_list,len(H_list),1)
         ##############
 
         return z, R, H

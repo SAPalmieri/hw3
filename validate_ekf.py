@@ -131,9 +131,9 @@ def validate_localization_map_line_to_predicted_measurement(fname = "validation_
     return True
 
 def validate_localization_associate_measurements(fname = "validation_run.p"):
-    if not validate_localization_transition_model(fname) or not validate_localization_map_line_to_predicted_measurement(fname):
-        print "Validation of associate_measurements cannot proceed."
-        return False
+    # if not validate_localization_transition_model(fname) or not validate_localization_map_line_to_predicted_measurement(fname):
+    #     print "Validation of associate_measurements cannot proceed."
+    #     return False
 
     validation_run = pickle.load(open(fname, "rb"))
 
@@ -220,11 +220,11 @@ def validate_SLAM_EKF(fname = "validation_run.p"):
 
 if __name__ == '__main__':
     ### PROBLEM 1
-    validate_localization_transition_update()
+    # validate_localization_transition_update()
     # validate_localization_EKF()
 
     ## Subcomponent validation
-    validate_localization_transition_model()
+    # validate_localization_transition_model()
     validate_localization_map_line_to_predicted_measurement()
     # validate_localization_associate_measurements()
 
