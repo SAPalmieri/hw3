@@ -131,19 +131,15 @@ class Localization_EKF(EKF):
         #need to transform parameters from world to camera
         rot = np.array([ [cos(th), -sin(th)],
                         [sin(th), cos(th)] ])
-        dx,dy = rot.dot([x,y])
+        dx,dy = rot.dot([xc,yc])
         test = 4.98221016
         alphaprime = alpha-thc-th
-        # h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
-        val = xc*cos(thc) + yc*sin(thc) - x*cos(th) - y*sin(th)
-        dx = val*cos(th+thc)
-        dy = val*sin(th+thc)
-        xdes = x+ dx
-        ydes = y+dy
-        h = np.array([alphaprime, r - xdes*np.cos(th+thc) - (ydes)*np.sin(th+thc)])
-        print('h: ', h)
+        h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
+        derivh2 = -cos(alpha)*(-xc*sin(th)-yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
+
         Hx = np.array([ [0,0,-1],
-                        [-np.cos(alpha), -np.sin(alpha), 0]])
+                        [-np.cos(alpha), -np.sin(alpha), derivh2 ]])
+        
         ##############
 
         flipped, h = normalize_line_parameters(h)
@@ -175,18 +171,15 @@ class Localization_EKF(EKF):
             for j in range((self.map_lines.shape[1])):
                 m = self.map_lines[:,j]
                 h, Hx = self.map_line_to_predicted_measurement(m)
-                v = rawZ[i]-h
+                v = rawZ[:,i]-h
                 S = Hx.dot(P).dot(Hx.T) + rawR[i]
                 d = np.dot(v.T,np.linalg.inv(S)).dot(v)
                 if d < valid:
                     v_list.append(v)
                     R_list.append(rawR[i])
                     H_list.append(Hx)
-                
-
-        
         ##############
-
+        
         return v_list, R_list, H_list
 
     # Assemble one joint measurement, covariance, and Jacobian from the individual values corresponding to each
