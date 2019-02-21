@@ -156,6 +156,9 @@ def validate_localization_associate_measurements(fname = "validation_run.p"):
         v_error = sum([norm(v_list[j] - v_list_ref[k]) for j, k in enumerate(permutation)])
         R_error = sum([norm(R_list[j] - R_list_ref[k]) for j, k in enumerate(permutation)])
         H_error = sum([norm(H_list[j] - H_list_ref[k]) for j, k in enumerate(permutation)])
+        print(v_error)
+        print(R_error)
+        print(H_error)
         if v_error + R_error + H_error > 1e-3:
             print "You may have an error in Localization_EKF.associate_measurements."
             return False

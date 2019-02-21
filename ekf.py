@@ -136,7 +136,6 @@ class Localization_EKF(EKF):
         alphaprime = alpha-thc-th
         h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
         derivh2 = -cos(alpha)*(-xc*sin(th)-yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
-
         Hx = np.array([ [0,0,-1],
                         [-np.cos(alpha), -np.sin(alpha), derivh2 ]])
         
@@ -167,17 +166,30 @@ class Localization_EKF(EKF):
         v_list = []
         R_list = []
         H_list = []
+        d_list = []
         for i in range(len(rawR)):
             for j in range((self.map_lines.shape[1])):
                 m = self.map_lines[:,j]
                 h, Hx = self.map_line_to_predicted_measurement(m)
                 v = rawZ[:,i]-h
                 S = Hx.dot(P).dot(Hx.T) + rawR[i]
-                d = np.dot(v.T,np.linalg.inv(S)).dot(v)
-                if d < valid:
+                d = np.dot(v,np.linalg.inv(S)).dot(v)
+
+                if np.abs(d) < valid:
+                    d_list.append(d)
                     v_list.append(v)
                     R_list.append(rawR[i])
                     H_list.append(Hx)
+
+        minIndex = d_list.index(min(d_list))
+
+        v_list = v_list[minIndex].tolist()
+        R_list = R_list[minIndex].tolist()
+        H_list = H_list[minIndex].tolist()
+        
+        print('v', v_list)
+        print('R', R_list)
+        print('H', H_list)
         ##############
         
         return v_list, R_list, H_list
@@ -193,8 +205,11 @@ class Localization_EKF(EKF):
         #### TODO ####
         # compute z, R, H
         z = np.reshape(v_list, (len(v_list),1))
-        R = np.eye(len(z))*R_list
-        H = np.reshape(H_list,len(H_list),1)
+        temp = np.reshape(R_list, (len(R_list), 2))
+        R = np.zeros((len(temp),len(temp)))
+        for i in xrange(0,len(temp),2):
+            R[i:i+2,i:i+2] = temp[i:i+2,:]
+        H = np.reshape(H_list,(len(H_list),3))
         ##############
 
         return z, R, H
