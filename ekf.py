@@ -22,6 +22,7 @@ class EKF(object):
         #### TODO ####
         # update self.x, self.P
         self.x = g
+        print(self.x.shape)
         self.P = Gx.dot(self.P).dot(Gx.T) + dt * Gu.dot(self.Q).dot(Gu.T)
         ##############
 
@@ -51,7 +52,9 @@ class EKF(object):
         P = self.P
         sig = H.dot(P).dot(H.T) + R
         K = P.dot(H.T).dot(np.linalg.inv(sig))
-        self.x = self.x + K.dot(z)
+        self.x = self.x + K.dot(z[:,0])
+        # print(self.x.shape)
+        # print(K.dot(z).shape)
         self.P = P - K.dot(sig).dot(K.T)
         ##############
 
@@ -176,20 +179,17 @@ class Localization_EKF(EKF):
                 d = np.dot(v,np.linalg.inv(S)).dot(v)
 
                 if np.abs(d) < valid:
-                    d_list.append(d)
-                    v_list.append(v)
-                    R_list.append(rawR[i])
-                    H_list.append(Hx)
-
-        minIndex = d_list.index(min(d_list))
-
-        v_list = v_list[minIndex].tolist()
-        R_list = R_list[minIndex].tolist()
-        H_list = H_list[minIndex].tolist()
-        
-        print('v', v_list)
-        print('R', R_list)
-        print('H', H_list)
+                    valid = d
+                    vmin  = v
+                    dmin = d
+                    Hmin = Hx
+                    rmin = rawR[i]
+            if np.abs(valid) < g**2:
+                valid = g**2
+                d_list.append(dmin)
+                v_list.append(vmin)
+                R_list.append(rmin)
+                H_list.append(Hmin)
         ##############
         
         return v_list, R_list, H_list
@@ -204,12 +204,13 @@ class Localization_EKF(EKF):
 
         #### TODO ####
         # compute z, R, H
-        z = np.reshape(v_list, (len(v_list),1))
-        temp = np.reshape(R_list, (len(R_list), 2))
+        z = np.reshape(v_list, (len(v_list)*2,1))
+        temp = np.reshape(R_list, (len(R_list)*2, 2))
         R = np.zeros((len(temp),len(temp)))
         for i in xrange(0,len(temp),2):
             R[i:i+2,i:i+2] = temp[i:i+2,:]
-        H = np.reshape(H_list,(len(H_list),3))
+            # print(R)
+        H = np.reshape(H_list,(len(H_list)*2,3))
         ##############
 
         return z, R, H
