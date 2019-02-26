@@ -22,7 +22,6 @@ class EKF(object):
         #### TODO ####
         # update self.x, self.P
         self.x = g
-        print(self.x.shape)
         self.P = Gx.dot(self.P).dot(Gx.T) + dt * Gu.dot(self.Q).dot(Gu.T)
         ##############
 
@@ -135,7 +134,6 @@ class Localization_EKF(EKF):
         rot = np.array([ [cos(th), -sin(th)],
                         [sin(th), cos(th)] ])
         dx,dy = rot.dot([xc,yc])
-        test = 4.98221016
         alphaprime = alpha-thc-th
         h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
         derivh2 = -cos(alpha)*(-xc*sin(th)-yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
@@ -231,9 +229,37 @@ class SLAM_EKF(EKF):
 
         #### TODO ####
         # compute g, Gx, Gu (some shape hints below)
-        # g = np.copy(self.x)
-        # Gx = np.eye(self.x.size)
-        # Gu = np.zeros((self.x.size, 2))
+        Gx = np.eye(self.x.size)
+        Gu = np.zeros((self.x.size, 2))
+        g = np.zeros(self.x.size)
+        xdot = v*np.cos(th)
+        ydot = v*np.sin(th)
+        if np.abs(om) < 1e-6:
+            gx = x + xdot*dt 
+            gy = y + ydot*dt
+            gth = th + om*dt
+            tempGx = np.array([ [1, 0, -v*np.sin(th)*dt ],
+                            [0, 1, v*np.cos(th)*dt ],
+                            [0, 0, 1] ])
+            tempGu = np.array([ [np.cos(th)*dt, -v*dt*dt*np.sin(th)],
+                            [np.sin(th)*dt, v*dt*dt*np.cos(th)],
+                            [0, dt] ])     
+        else:
+            gx = x + v/om * (np.sin(th+om*dt)-np.sin(th))
+            gy = y + v/om * (np.cos(th)-np.cos(th+om*dt))
+            gth = th + om*dt
+            tempGx = np.array([ [1, 0, v/om * (np.cos(th+om*dt) - np.cos(th)) ],
+                            [0, 1, v/om * (np.sin(th+om*dt) - np.sin(th))],
+                            [0, 0, 1] ])
+            tempGu = np.array([ [1 /om * (np.sin(th+om*dt)-np.sin(th)), -v/(om**2) * (np.sin(th+om*dt)-np.sin(th)) + v/om *( np.cos(th+ om*dt)*dt)],
+                            [1/om * (np.cos(th)-np.cos(th+om*dt)), -v/(om**2) * (np.cos(th)-np.cos(th+om*dt)) + v/om *(np.sin(th+om*dt)*dt) ],
+                            [0, dt] ])
+        g[0] = gx
+        g[1] = gy
+        g[2] = gth
+        Gx[:3,:3] = tempGx
+        Gu[:3,:] = tempGu
+
         ##############
 
         return g, Gx, Gu
@@ -254,6 +280,12 @@ class SLAM_EKF(EKF):
 
         #### TODO ####
         # compute z, R, H (should be identical to Localization_EKF.measurement_model above)
+        z = np.reshape(v_list, (len(v_list)*2,1))
+        temp = np.reshape(R_list, (len(R_list)*2, 2))
+        R = np.zeros((len(temp),len(temp)))
+        for i in xrange(0,len(temp),2):
+            R[i:i+2,i:i+2] = temp[i:i+2,:]
+        H = np.reshape(H_list,(len(H_list)*2,3))
         ##############
 
         return z, R, H
@@ -267,16 +299,26 @@ class SLAM_EKF(EKF):
 
         #### TODO ####
         # compute h, Hx (you may find the skeleton for computing Hx below useful)
+        xc,yc,thc = self.tf_base_to_camera #camera coordinates/pose relative to base
+        x,y,th = self.x[:3] #base coordinates relative to world
+        #we want parameters in terms of camera (alphac, rc)
+        #currently have parameters in terms of world (alpha,r)
+        #need to transform parameters from world to camera
+        rot = np.array([ [cos(th), -sin(th)],
+                        [sin(th), cos(th)] ])
+        dx,dy = rot.dot([xc,yc])
+        alphaprime = alpha-thc-th
+        h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
 
         Hx = np.zeros((2,self.x.size))
-        Hx[:,:3] = FILLMEIN
+        Hx[:,:3] = self.x[:3] #fillmein
         # First two map lines are assumed fixed so we don't want to propagate any measurement correction to them
         if j > 1:
             Hx[0, 3+2*j] = FILLMEIN
             Hx[1, 3+2*j] = FILLMEIN
             Hx[0, 3+2*j+1] = FILLMEIN
             Hx[1, 3+2*j+1] = FILLMEIN
-
+        
         ##############
 
         flipped, h = normalize_line_parameters(h)
@@ -290,6 +332,32 @@ class SLAM_EKF(EKF):
 
         #### TODO ####
         # compute v_list, R_list, H_list
-        ##############
+        g = self.g
+        valid = g**2
+        P = self.P
+        v_list = []
+        R_list = []
+        H_list = []
+        d_list = []
+        for i in range(len(rawR)):
+            for j in range(len(self.x)-3):
+                h, Hx = self.map_line_to_predicted_measurement(j)
+                v = rawZ[:,i]-h
+                S = Hx.dot(P).dot(Hx.T) + rawR[i]
+                d = np.dot(v,np.linalg.inv(S)).dot(v)
 
+                if np.abs(d) < valid:
+                    valid = d
+                    vmin  = v
+                    dmin = d
+                    Hmin = Hx
+                    rmin = rawR[i]
+            if np.abs(valid) < g**2:
+                valid = g**2
+                d_list.append(dmin)
+                v_list.append(vmin)
+                R_list.append(rmin)
+                H_list.append(Hmin)
+        ##############
+        
         return v_list, R_list, H_list
