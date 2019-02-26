@@ -203,11 +203,13 @@ class Localization_EKF(EKF):
         #### TODO ####
         # compute z, R, H
         z = np.reshape(v_list, (len(v_list)*2,1))
+
         temp = np.reshape(R_list, (len(R_list)*2, 2))
-        R = np.zeros((len(temp),len(temp)))
-        for i in xrange(0,len(temp),2):
-            R[i:i+2,i:i+2] = temp[i:i+2,:]
-            # print(R)
+        # R = np.zeros((len(temp),len(temp)))
+        # for i in xrange(0,len(temp),2):
+        #     R[i:i+2,i:i+2] = temp[i:i+2,:]
+        #     # print(R)
+        R = scipy.linalg.block_diag(*R_list)
         H = np.reshape(H_list,(len(H_list)*2,3))
         ##############
 
@@ -231,7 +233,7 @@ class SLAM_EKF(EKF):
         # compute g, Gx, Gu (some shape hints below)
         Gx = np.eye(self.x.size)
         Gu = np.zeros((self.x.size, 2))
-        g = np.zeros(self.x.size)
+        g = np.copy(self.x)
         xdot = v*np.cos(th)
         ydot = v*np.sin(th)
         if np.abs(om) < 1e-6:
@@ -284,10 +286,11 @@ class SLAM_EKF(EKF):
         z = np.reshape(v_list, (len(v_list)*2,1))
         # print(len(R_list)[0])
         # print(len(self.x))
-        temp = np.reshape(R_list, (len(R_list)*2, 2))
-        R = np.zeros((len(temp),len(temp)))
-        for i in xrange(0,len(temp),2):
-            R[i:i+2,i:i+2] = temp[i:i+2,:]
+        # temp = np.reshape(R_list, (len(R_list)*2, 2))
+        # R = np.zeros((len(temp),len(temp)))
+        # for i in xrange(0,len(temp),2):
+        #     R[i:i+2,i:i+2] = temp[i:i+2,:]
+        R = scipy.linalg.block_diag(*R_list)
         H = np.reshape(H_list,(len(H_list)*2,len(self.x)))
         ##############
 
@@ -312,15 +315,15 @@ class SLAM_EKF(EKF):
         dx,dy = rot.dot([xc,yc])
         alphaprime = alpha-thc-th
         h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
-        derivh2 = -cos(alpha)*(-xc*sin(th)-yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
+        derivh2 = cos(alpha)*(xc*sin(th)+yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
         Hx = np.zeros((2,self.x.size))
         Hx[:,:3] = np.array([ [0,0,-1],
                         [-np.cos(alpha), -np.sin(alpha), derivh2 ]]) #fillmein
         # First two map lines are assumed fixed so we don't want to propagate any measurement correction to them
         if j > 1:
             Hx[0, 3+2*j] = 1
-            Hx[1, 3+2*j] = 0
-            Hx[0, 3+2*j+1] = (x+dx)*np.sin(alpha) - (y+dy)*np.cos(alpha)
+            Hx[1, 3+2*j] = (x+dx)*np.sin(alpha) - (y+dy)*np.cos(alpha)
+            Hx[0, 3+2*j+1] = 0
             Hx[1, 3+2*j+1] = 1
         
         ##############
@@ -343,7 +346,7 @@ class SLAM_EKF(EKF):
         R_list = []
         H_list = []
         d_list = []
-        numlines = (len(self.x)-3 )/2 - 1
+        numlines = (len(self.x)-3 )/2
         for i in range(len(rawR)):
             for j in range(numlines):
                 h, Hx = self.map_line_to_predicted_measurement(j)
