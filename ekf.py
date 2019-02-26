@@ -280,12 +280,15 @@ class SLAM_EKF(EKF):
 
         #### TODO ####
         # compute z, R, H (should be identical to Localization_EKF.measurement_model above)
+        
         z = np.reshape(v_list, (len(v_list)*2,1))
+        # print(len(R_list)[0])
+        # print(len(self.x))
         temp = np.reshape(R_list, (len(R_list)*2, 2))
         R = np.zeros((len(temp),len(temp)))
         for i in xrange(0,len(temp),2):
             R[i:i+2,i:i+2] = temp[i:i+2,:]
-        H = np.reshape(H_list,(len(H_list)*2,3))
+        H = np.reshape(H_list,(len(H_list)*2,len(self.x)))
         ##############
 
         return z, R, H
@@ -309,15 +312,16 @@ class SLAM_EKF(EKF):
         dx,dy = rot.dot([xc,yc])
         alphaprime = alpha-thc-th
         h = np.array([alphaprime, r - (x+dx)*np.cos(alpha) - (y+dy)*np.sin(alpha)])
-
+        derivh2 = -cos(alpha)*(-xc*sin(th)-yc*cos(th)) - sin(alpha)*(xc*cos(th)-yc*sin(th))
         Hx = np.zeros((2,self.x.size))
-        Hx[:,:3] = self.x[:3] #fillmein
+        Hx[:,:3] = np.array([ [0,0,-1],
+                        [-np.cos(alpha), -np.sin(alpha), derivh2 ]]) #fillmein
         # First two map lines are assumed fixed so we don't want to propagate any measurement correction to them
         if j > 1:
-            Hx[0, 3+2*j] = FILLMEIN
-            Hx[1, 3+2*j] = FILLMEIN
-            Hx[0, 3+2*j+1] = FILLMEIN
-            Hx[1, 3+2*j+1] = FILLMEIN
+            Hx[0, 3+2*j] = 1
+            Hx[1, 3+2*j] = 0
+            Hx[0, 3+2*j+1] = (x+dx)*np.sin(alpha) - (y+dy)*np.cos(alpha)
+            Hx[1, 3+2*j+1] = 1
         
         ##############
 
@@ -339,8 +343,9 @@ class SLAM_EKF(EKF):
         R_list = []
         H_list = []
         d_list = []
+        numlines = (len(self.x)-3 )/2 - 1
         for i in range(len(rawR)):
-            for j in range(len(self.x)-3):
+            for j in range(numlines):
                 h, Hx = self.map_line_to_predicted_measurement(j)
                 v = rawZ[:,i]-h
                 S = Hx.dot(P).dot(Hx.T) + rawR[i]
